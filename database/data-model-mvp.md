@@ -7,18 +7,18 @@ erDiagram
   USER ||--o{ COLLECTION : owns
   COLLECTION ||--o{ ITEM : contains
   USER {
-    UUID id PK
+    uuid id PK
     string username
     string password
   }
   COLLECTION {
-    UUID id PK
-    UUID userId FK
+    uuid id PK
+    uuid userId FK
     string name
   }
   ITEM {
-    UUID id PK
-    UUID collectionId FK
+    uuid id PK
+    uuid collectionId FK
     string name
     decimal pricePaid
     string currency
