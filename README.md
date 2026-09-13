@@ -25,6 +25,11 @@ Pack-Rat lets you build and manage your own collection without relying on someon
 - **Backend:** Spring Boot (repo-name: pack-rat-backend)
 - **Frontend:** Angular (repo-name: pack-rat-frontend)
 - **Database:** PostgreSQL (via Docker) (in repo: pack-rat-backend)
+## GIT
+
+It will use the conventional commits structure of how commit messages are written
+
+For details: https://www.conventionalcommits.org/en/v1.0.0/
 ## Status
  
 Early development — MVP scope is defined, technical setup and first features are in progress. See the issue board for current and upcoming work.
