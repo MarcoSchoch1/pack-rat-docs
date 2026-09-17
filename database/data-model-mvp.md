@@ -6,6 +6,7 @@
 erDiagram
   USER ||--o{ COLLECTION : owns
   COLLECTION ||--o{ ITEM : contains
+  ITEM ||--o{ IMAGE : has
   USER {
     uuid id PK
     string username
@@ -24,40 +25,57 @@ erDiagram
     string currency
     date dateAcquired
     string condition
-    string imageUrl
     string marketplaceLink
     datetime createdAt
     datetime updatedAt
+  }
+  IMAGE {
+    uuid id PK
+    uuid itemId FK
+    string url
+    string originalFilename
+    string contentType
+    int fileSizeBytes
+    datetime createdAt
   }
 ```
  
 ## Entities
  
 ### User
-- `id` — UUID primary key
+- `id` — uuid primary key
 - `username`
 - `password`
 Dev/hardcoded login for MVP. Structured so real accounts for friends can be added later without reworking the schema.
  
 ### Collection
-- `id` — UUID primary key
-- `userId` — UUID, foreign key to User
+- `id` — uuid primary key
+- `userId` — uuid, foreign key to User
 - `name`
 One-to-many with User: a user can own multiple collections, even though the MVP only creates and displays one. Keeps the door open for use cases like separate collections per TCG later.
  
 ### Item
-- `id` — UUID primary key
-- `collectionId` — UUID, foreign key to Collection
+- `id` — uuid primary key
+- `collectionId` — uuid, foreign key to Collection
 - `name`
 - `pricePaid` — decimal
 - `currency` — ISO code (e.g. CHF, USD, EUR)
 - `dateAcquired` — date the item was obtained (user-entered)
 - `condition` — fixed set of values (see below)
-- `imageUrl` — link to the uploaded (resized/small) picture
 - `marketplaceLink` — link to TCGPlayer/Cardmarket for manual current-value lookup
 - `createdAt` — when the record was created (system-generated)
 - `updatedAt` — when the record was last edited (system-generated)
 One-to-many with Collection: each item belongs to exactly one collection.
+ 
+### Image
+- `id` — uuid primary key
+- `itemId` — uuid, foreign key to Item
+- `url` — where the resized/uploaded image is served from
+- `originalFilename` — the filename as uploaded, for display purposes
+- `contentType` — e.g. `image/jpeg`, used for validation and serving
+- `fileSizeBytes` — enforces "small size" constraint, useful for debugging storage
+- `createdAt` — when the image was uploaded
+One-to-many with Item: an item can have multiple images, even though the MVP only ever uploads one. Future-proofs for cases like front/back photos of a card without a schema migration.
  
 ## Fixed value sets
  
@@ -75,4 +93,4 @@ Stored as ISO currency codes (e.g. CHF, USD, EUR) rather than symbols, for clean
  
 ## Open decisions
  
-- **Total price now** (collection overview) — aggregation logic still to be defined; each item has a marketplace link for manual lookup rather than a stored current-value figure. See GitLab/GitHub issue tracker for details.
+- **Total price now** (collection overview) — aggregation logic still to be defined; each item has a marketplace link for manual lookup rather than a stored current-value figure. See GitHub issue tracker for details.
