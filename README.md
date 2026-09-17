@@ -22,8 +22,8 @@ Pack-Rat lets you build and manage your own collection without relying on someon
 - **Login** — a development login for now, structured so real accounts for friends can be added later without reworking the app.
 ## Tech stack
  
-- **Backend:** Spring Boot (repo-name: pack-rat-backend)
-- **Frontend:** Angular + Tailwind CSS (repo-name: pack-rat-frontend)
+- **Backend:** Spring Boot ([pack-rat-backend](https://github.com/MarcoSchoch1/pack-rat-backend))
+- **Frontend:** Angular + Tailwind CSS ([pack-rat-frontend](https://github.com/MarcoSchoch1/pack-rat-frontend))
 - **Database:** PostgreSQL via Docker (in repo: pack-rat-backend)
 - **Auth:** Stateless JWT (dev/hardcoded login for now, real accounts later)
 
@@ -41,6 +41,10 @@ Decisions and specs made before/during implementation, kept in this repo:
 It will use the conventional commits structure of how commit messages are written
 
 For details: https://www.conventionalcommits.org/en/v1.0.0/
+## Issue tracking
+
+New issues are auto-added to the project board via a GitHub Actions workflow ([`.github/workflows/add-to-project.yml`](.github/workflows/add-to-project.yml)), so the board stays current without manual triage.
+
 ## Status
  
 Early development — MVP scope is defined, technical setup and first features are in progress. See the issue board for current and upcoming work.
