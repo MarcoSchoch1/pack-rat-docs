@@ -2,6 +2,28 @@
 
 A log of the significant technical decisions made on this project, the context behind them, and the alternatives considered. Kept for future reference — and to make the reasoning behind the project easy to walk through, not just the outcome.
 
+Entries are numbered chronologically, in the order decisions were made, and are never renumbered — this preserves the actual decision history, especially once later decisions revise or build on earlier ones. Use the index below to jump to a topic instead.
+
+## Index by topic
+
+**Database & data model**
+[ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field)
+
+**API design**
+[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint)
+
+**Images (cross-cutting: data model + API + constraints)**
+[ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (entity) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (endpoint) · [ADR-015](#adr-015-image-upload-limits--max-2mb-upload-resized-to-500px-longest-edge) (size limits)
+
+**Repos & infrastructure**
+[ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-009](#adr-009-split-backend-and-frontend-into-separate-repositories) (repo split) · [ADR-010](#adr-010-separate-containers-per-service-db-only-docker-during-local-development) (container-per-service) · [ADR-012](#adr-012-docker-compose-for-local-postgres-lives-in-the-backend-repo-a-separate-deploy-repo-will-handle-full-multi-service-orchestration) (compose file placement, deploy repo)
+
+**Frontend**
+[ADR-011](#adr-011-use-tailwind-css-instead-of-a-component-library-eg-angular-material) (Tailwind CSS)
+
+**Backend setup & operations**
+[ADR-013](#adr-013-backend-project-setup--maven-java-21-lts-package-by-layer) (Maven/Java 21/package structure) · [ADR-014](#adr-014-secrets-management-via-gitignored-local-config-environment-variables-in-deployment) (secrets management)
+
 ---
 
 ## ADR-001: Use PostgreSQL via Docker instead of H2
@@ -18,6 +40,8 @@ A log of the significant technical decisions made on this project, the context b
 - **SQLite:** Simple, single-file, no server process — a reasonable alternative, but less representative of a production deployment.
 
 **Consequences:** A small amount of upfront setup (Docker Compose file, container management) in exchange for skipping a schema-migration step later and having a stack that matches how the app would actually be deployed.
+
+**Related:** ADR-010 (container-per-service), ADR-012 (compose file placement)
 
 ---
 
@@ -63,6 +87,8 @@ A log of the significant technical decisions made on this project, the context b
 - **Flat fields on Item** (`imageUrl`, `originalFilename`, `contentType`, `fileSizeBytes`): Simpler, no extra join, matches the current "one picture" rule exactly — but would require a schema migration to support multiple photos per item later (e.g. front/back of a card).
 
 **Consequences:** One extra table and join for what is currently a 1:1 relationship, in exchange for room to grow without a migration.
+
+**Related:** ADR-008 (upload endpoint), ADR-015 (size limits)
 
 ---
 
@@ -121,6 +147,8 @@ A log of the significant technical decisions made on this project, the context b
 
 **Consequences:** Two requests instead of one for the full "add item with photo" flow, in exchange for cleaner separation of concerns and simpler validation per step.
 
+**Related:** ADR-004 (Image entity), ADR-015 (size limits)
+
 ---
 
 ## ADR-009: Split backend and frontend into separate repositories
@@ -153,34 +181,89 @@ A log of the significant technical decisions made on this project, the context b
 - **Everything containerized even during development:** Exactly matches production at all times, but a rebuild-and-restart cycle on every code change makes day-to-day iteration noticeably slower.
 
 **Consequences:** Fast local iteration without sacrificing confidence that the app actually works in its real, fully-containerized deployment shape — verified periodically rather than continuously. Hosting target (VPS vs. home server) deferred as a separate decision.
- 
+
+**Related:** ADR-001 (Postgres/Docker), ADR-012 (compose file placement)
+
 ---
- 
+
 ## ADR-011: Use Tailwind CSS instead of a component library (e.g. Angular Material)
- 
+
 **Status:** Accepted
- 
+
 **Context:** The Angular frontend needs a styling approach. Angular Material offers pre-built, accessible components (buttons, forms, dropdowns) with minimal styling effort. Tailwind CSS offers utility classes instead of components, requiring more manual styling work but no framework-specific component API to learn.
- 
+
 **Decision:** Use Tailwind CSS for styling.
- 
+
 **Alternatives considered:**
 - **Angular Material:** Faster to build a consistent, accessible UI with less manual styling, but results in a recognizably "Material Design" look and ties UI knowledge specifically to Angular's ecosystem.
 - **Plain CSS/SCSS:** Full control with no dependency, but no utility-class speed benefit and more time spent naming classes and managing stylesheets.
+
 **Consequences:** More manual work to build common UI patterns (dropdowns, modals) that Material would provide out of the box, in exchange for a widely transferable frontend skill (Tailwind is framework-agnostic and broadly in-demand) and full control over the app's visual identity rather than a stock component look.
 
 ---
- 
+
 ## ADR-012: Docker Compose for local Postgres lives in the backend repo; a separate deploy repo will handle full multi-service orchestration
- 
+
 **Status:** Accepted
- 
+
 **Context:** Per ADR-010, only the backend touches Postgres directly during local development (`docker compose up postgres`, backend and frontend run natively). Needed to decide where that Postgres `docker-compose.yml` should live, and separately, how the full multi-service deployment (Postgres + backend + frontend together, per ADR-010's three-container plan) will eventually be orchestrated.
- 
+
 **Decision:**
 - Keep a single-service `docker-compose.yml` (Postgres only) inside `pack-rat-backend`, since it's a dependency of the backend during local dev and nothing else needs it at that stage. Anyone cloning the backend repo gets a working local setup with no cross-repo lookup.
 - Create a separate `pack-rat-deploy` repository later to hold the full deployment compose file (all three services together) and CI/CD orchestration, since a compose file inside a single-service repo can't cleanly reference container images built from the other repos.
+
 **Alternatives considered:**
 - **One shared compose file across all repos from the start:** Would need to live somewhere not tied to any single service, adding structure before it's actually needed. Premature for the current stage where only Postgres is containerized during dev.
 - **Duplicate the full compose file into each repo:** Avoids a new repo, but risks the files drifting out of sync as services change.
+
 **Consequences:** Local dev setup stays simple and self-contained per repo now; deployment/CI-CD orchestration gets a clear, dedicated home once that stage of the project starts, without needing to relocate files out of `pack-rat-backend` later.
+
+**Related:** ADR-001 (Postgres/Docker), ADR-010 (container-per-service)
+
+---
+
+## ADR-013: Backend project setup — Maven, Java 21 (LTS), package-by-layer
+
+**Status:** Accepted
+
+**Context:** Needed to pick the Spring Initializr configuration for `pack-rat-backend` before generating the project, to avoid regenerating it later.
+
+**Decision:**
+- Build tool: Maven
+- Java version: 21 (LTS)
+- Package structure: by layer (`controller/`, `service/`, `repository/`, `model/`)
+
+**Alternatives considered:**
+- **Gradle:** Faster builds, more concise config, but Maven's XML convention is more common in the enterprise Java shops matching the target job roles for this project.
+- **Latest Java version (25):** More current, but LTS releases are what most companies actually run in production, to avoid frequent upgrade cycles — Java 21 is the more defensible, production-credible choice.
+- **Package-by-feature:** Scales better for larger codebases, but package-by-layer is simpler to navigate for a project this size and more familiar as a starting convention.
+
+**Consequences:** A conventional, enterprise-recognizable project setup — easy to explain and defend in an interview context, even if not the most "modern" choice on every axis.
+
+---
+
+## ADR-014: Secrets management via gitignored local config, environment variables in deployment
+
+**Status:** Accepted
+
+**Context:** DB credentials and the JWT signing secret must not be hardcoded or committed to the repository.
+
+**Decision:**
+- Local dev: secrets live in a gitignored `.env` (or `application-local.properties`) file; a committed `.env.example` / `application-local.properties.example` with placeholder values shows what's needed.
+- Deployment: actual secrets are passed as environment variables into the container at runtime, handled in `pack-rat-deploy` (see ADR-012) — never baked into an image or committed anywhere.
+
+**Consequences:** Standard, low-risk secrets handling with no special tooling required; anyone cloning the repo can see what configuration they need without exposing real values.
+
+---
+
+## ADR-015: Image upload limits — max 2MB upload, resized to 500px longest edge
+
+**Status:** Accepted
+
+**Context:** The MVP scope required images to be "small size," but no concrete numbers had been set, which blocks writing the actual resize/validation logic.
+
+**Decision:** Accept uploads up to 2MB; resize/store images at a maximum of 500px on the longest edge.
+
+**Consequences:** Keeps storage and page-load size small, appropriate for the personal/friends-scale use case; concrete numbers now exist for both backend validation (reject uploads over 2MB) and the resize step (`Image` entity's `fileSizeBytes` will reflect the post-resize size).
+
+**Related:** ADR-004 (Image entity), ADR-008 (upload endpoint)
