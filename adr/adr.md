@@ -24,6 +24,9 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Backend setup & operations**
 [ADR-013](#adr-013-backend-project-setup--maven-java-21-lts-package-by-layer) (Maven/Java 21/package structure) · [ADR-014](#adr-014-secrets-management-via-gitignored-local-config-environment-variables-in-deployment) (secrets management)
 
+**Pricing**
+[ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field) · [ADR-017](#adr-017-current-price-is-a-manual-optional-field-for-now--no-automated-price-lookup-yet) (manual current price)
+
 ---
 
 ## ADR-001: Use PostgreSQL via Docker instead of H2
@@ -284,3 +287,21 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** A small, explainable piece of Spring Security config (one bean, one property) instead of none at all; origins are environment-driven, consistent with ADR-014's approach to environment-specific settings.
 
 **Related:** ADR-007 (JWT auth, same filter chain), ADR-009/ADR-010 (separate frontend/backend services — why this is needed at all), ADR-014 (env-driven config pattern)
+
+---
+
+## ADR-017: Current price is a manual, optional field for now — no automated price-lookup yet
+
+**Status:** Accepted
+
+**Context:** The dashboard needs a "total price now" figure alongside "total price paid." Automatically fetching current value from marketplaces (TCGPlayer/Cardmarket) is a real feature planned for later, but per-marketplace scraping/API integration is real scope, not needed to unblock the MVP — `marketplaceLink` already lets a user look the price up manually.
+
+**Decision:** Add `priceNow` as an optional, user-editable field on `Item` (same shape as `pricePaid`: decimal, same currency), filled in manually for now. `Collection.totalPriceNow` sums whatever items have a value set, and is `null` if none do. `marketplaceLink` stays the manual path to find the number; nothing fetches it automatically yet.
+
+**Alternatives considered:**
+- **Leave `totalPriceNow` unimplemented until automated lookup exists:** Avoids a manually-filled field today, but leaves the dashboard's second metric permanently blank and defers work (field + aggregation) that's needed either way.
+- **Build the automated marketplace lookup now:** Solves it properly, but per-marketplace integration is scope creep for the MVP.
+
+**Consequences:** Dashboard's "total price now" is real and functional immediately, user-maintained. The field and aggregation are already in place for when automated lookup arrives later — that becomes a new write path filling the same field, not a schema change.
+
+**Related:** ADR-006 (currency field), ADR-004 (marketplaceLink stays the manual fallback)

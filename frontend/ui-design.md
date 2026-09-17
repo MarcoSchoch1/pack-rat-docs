@@ -15,14 +15,14 @@ Rough screen layouts agreed on during design discussion, before implementation. 
 ![Dashboard mockup](images/dashboard.png)
 
 - Header: collection name + "Add item" button
-- Two metric cards: total price paid, total price now (shows "—" until that logic is defined — see open decisions in `data-model.md`)
+- Two metric cards: total price paid, total price now (sum of each item's manually-entered current price — see ADR-017; shows "—" if no item has one set)
 - Item grid: photo-first cards (name + price paid), click through to item detail
 
 ## 3. Add item form
 
 ![Add item form mockup](images/add-item-form.png)
 
-- Fields match the finalized data model: name, price paid, currency, date acquired, condition, marketplace link, picture
+- Fields match the finalized data model: name, price paid, current price (optional), currency, date acquired, condition, marketplace link, picture
 - Condition is a dropdown of the fixed grading scale (see `data-model.md`)
 - Image upload happens as a separate step from item creation (see ADR-008)
 

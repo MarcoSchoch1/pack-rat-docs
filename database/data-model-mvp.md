@@ -22,6 +22,7 @@ erDiagram
     uuid collectionId FK
     string name
     decimal pricePaid
+    decimal priceNow "nullable"
     string currency
     date dateAcquired
     string condition
@@ -59,7 +60,8 @@ One-to-many with User: a user can own multiple collections, even though the MVP 
 - `collectionId` — uuid, foreign key to Collection
 - `name`
 - `pricePaid` — decimal
-- `currency` — ISO code (e.g. CHF, USD, EUR)
+- `priceNow` — decimal, nullable; current value, entered manually by the user for now (see ADR-017)
+- `currency` — ISO code (e.g. CHF, USD, EUR) — applies to both `pricePaid` and `priceNow`
 - `dateAcquired` — date the item was obtained (user-entered)
 - `condition` — fixed set of values (see below)
 - `marketplaceLink` — link to TCGPlayer/Cardmarket for manual current-value lookup
@@ -91,6 +93,3 @@ Standard grading scale, matching common marketplace listings:
 ### Currency
 Stored as ISO currency codes (e.g. CHF, USD, EUR) rather than symbols, for cleaner future formatting/conversion.
  
-## Open decisions
- 
-- **Total price now** (collection overview) — aggregation logic still to be defined; each item has a marketplace link for manual lookup rather than a stored current-value figure. See GitHub issue tracker for details.

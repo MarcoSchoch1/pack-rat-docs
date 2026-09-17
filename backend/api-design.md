@@ -26,10 +26,10 @@
   "id": "9f2b...",
   "name": "My One Piece Collection",
   "totalPricePaid": 1240.50,
-  "totalPriceNow": null
+  "totalPriceNow": 980.00
 }
 ```
-`totalPriceNow` aggregation logic is an open decision — see the data model doc.
+`totalPriceNow` sums each item's manually-entered `priceNow` (see ADR-017); `null` if no item in the collection has one set.
 
 ## Items
 
@@ -47,6 +47,7 @@
 {
   "name": "OP01 Monkey D. Luffy Alt Art",
   "pricePaid": 45.00,
+  "priceNow": null,
   "currency": "CHF",
   "dateAcquired": "2026-03-14",
   "condition": "NEAR_MINT",
@@ -59,6 +60,7 @@
   "collectionId": "9f2b...",
   "name": "OP01 Monkey D. Luffy Alt Art",
   "pricePaid": 45.00,
+  "priceNow": null,
   "currency": "CHF",
   "dateAcquired": "2026-03-14",
   "condition": "NEAR_MINT",
@@ -113,6 +115,3 @@ Standard HTTP status codes:
 | 404 | Resource not found |
 | 500 | Server error |
 
-## Open decisions
-
-- **Total price now** aggregation — no stored current-value field exists yet; each item carries a marketplace link for manual lookup instead. Logic to be defined in a GitHub issue.
