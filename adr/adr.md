@@ -10,7 +10,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 [ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field)
 
 **API design**
-[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint)
+[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS)
 
 **Images (cross-cutting: data model + API + constraints)**
 [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (entity) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (endpoint) · [ADR-015](#adr-015-image-upload-limits--max-2mb-upload-resized-to-500px-longest-edge) (size limits)
@@ -267,3 +267,20 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** Keeps storage and page-load size small, appropriate for the personal/friends-scale use case; concrete numbers now exist for both backend validation (reject uploads over 2MB) and the resize step (`Image` entity's `fileSizeBytes` will reflect the post-resize size).
 
 **Related:** ADR-004 (Image entity), ADR-008 (upload endpoint)
+
+---
+
+## ADR-016: Explicit CORS configuration via Spring Security, not a reverse-proxy workaround
+
+**Status:** Accepted
+
+**Context:** Frontend (Angular) and backend (Spring Boot) are separate origins both locally (`localhost:4200` vs `localhost:8080`) and in deployment (separate services per ADR-009/ADR-010) — browsers block cross-origin requests by default, so something has to explicitly allow them.
+
+**Decision:** Configure CORS explicitly in Spring Security — a `CorsConfigurationSource` bean wired into the same filter chain as the JWT filter (ADR-007) — with allowed origins read from a config property (`app.cors.allowed-origins`) rather than hardcoded: `http://localhost:4200` for local dev, the real frontend domain once deployed.
+
+**Alternatives considered:**
+- **Reverse proxy (Nginx, or the Angular dev-server proxy) hiding the cross-origin call entirely:** Removes the problem with less code and no security-config surface, but couples the frontend and backend to always being deployed together behind the same proxy — less flexible if that ever changes, and moves the concern out of the backend entirely.
+
+**Consequences:** A small, explainable piece of Spring Security config (one bean, one property) instead of none at all; origins are environment-driven, consistent with ADR-014's approach to environment-specific settings.
+
+**Related:** ADR-007 (JWT auth, same filter chain), ADR-009/ADR-010 (separate frontend/backend services — why this is needed at all), ADR-014 (env-driven config pattern)
