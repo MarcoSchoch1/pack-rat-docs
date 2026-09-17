@@ -23,8 +23,19 @@ Pack-Rat lets you build and manage your own collection without relying on someon
 ## Tech stack
  
 - **Backend:** Spring Boot (repo-name: pack-rat-backend)
-- **Frontend:** Angular (repo-name: pack-rat-frontend)
-- **Database:** PostgreSQL (via Docker) (in repo: pack-rat-backend)
+- **Frontend:** Angular + Tailwind CSS (repo-name: pack-rat-frontend)
+- **Database:** PostgreSQL via Docker (in repo: pack-rat-backend)
+- **Auth:** Stateless JWT (dev/hardcoded login for now, real accounts later)
+
+## Design docs
+
+Decisions and specs made before/during implementation, kept in this repo:
+
+- [`adr/adr.md`](adr/adr.md) — architecture decision records (why, not just what)
+- [`database/data-model-mvp.md`](database/data-model-mvp.md) — entities, relationships, fixed value sets
+- [`backend/api-design.md`](backend/api-design.md) — REST endpoints, request/response shapes
+- [`frontend/ui-design.md`](frontend/ui-design.md) — rough screen layouts
+
 ## GIT
 
 It will use the conventional commits structure of how commit messages are written
