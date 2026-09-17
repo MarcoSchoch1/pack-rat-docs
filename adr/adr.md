@@ -168,4 +168,19 @@ A log of the significant technical decisions made on this project, the context b
 - **Angular Material:** Faster to build a consistent, accessible UI with less manual styling, but results in a recognizably "Material Design" look and ties UI knowledge specifically to Angular's ecosystem.
 - **Plain CSS/SCSS:** Full control with no dependency, but no utility-class speed benefit and more time spent naming classes and managing stylesheets.
 **Consequences:** More manual work to build common UI patterns (dropdowns, modals) that Material would provide out of the box, in exchange for a widely transferable frontend skill (Tailwind is framework-agnostic and broadly in-demand) and full control over the app's visual identity rather than a stock component look.
+
+---
  
+## ADR-012: Docker Compose for local Postgres lives in the backend repo; a separate deploy repo will handle full multi-service orchestration
+ 
+**Status:** Accepted
+ 
+**Context:** Per ADR-010, only the backend touches Postgres directly during local development (`docker compose up postgres`, backend and frontend run natively). Needed to decide where that Postgres `docker-compose.yml` should live, and separately, how the full multi-service deployment (Postgres + backend + frontend together, per ADR-010's three-container plan) will eventually be orchestrated.
+ 
+**Decision:**
+- Keep a single-service `docker-compose.yml` (Postgres only) inside `pack-rat-backend`, since it's a dependency of the backend during local dev and nothing else needs it at that stage. Anyone cloning the backend repo gets a working local setup with no cross-repo lookup.
+- Create a separate `pack-rat-deploy` repository later to hold the full deployment compose file (all three services together) and CI/CD orchestration, since a compose file inside a single-service repo can't cleanly reference container images built from the other repos.
+**Alternatives considered:**
+- **One shared compose file across all repos from the start:** Would need to live somewhere not tied to any single service, adding structure before it's actually needed. Premature for the current stage where only Postgres is containerized during dev.
+- **Duplicate the full compose file into each repo:** Avoids a new repo, but risks the files drifting out of sync as services change.
+**Consequences:** Local dev setup stays simple and self-contained per repo now; deployment/CI-CD orchestration gets a clear, dedicated home once that stage of the project starts, without needing to relocate files out of `pack-rat-backend` later.
