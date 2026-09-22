@@ -18,7 +18,11 @@
 | GET | `/api/collections` | List the current user's collections (MVP: returns one) |
 | POST | `/api/collections` | Create a collection |
 | GET | `/api/collections/{id}` | Get a single collection |
+| PUT | `/api/collections/{id}` | Update a collection |
+| DELETE | `/api/collections/{id}` | Remove a collection |
 | GET | `/api/collections/{id}/overview` | Dashboard data: name, total price paid, total price now |
+| GET | `/api/collections/{id}/items` | List items in a collection |
+| POST | `/api/collections/{id}/items` | Add a new item to a collection |
 
 **GET `/api/collections/{id}/overview`** — response:
 ```json
@@ -35,11 +39,11 @@
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/collections/{collectionId}/items` | List items in a collection |
-| POST | `/api/collections/{collectionId}/items` | Add a new item |
 | GET | `/api/items/{id}` | Get a single item |
 | PUT | `/api/items/{id}` | Update an item |
 | DELETE | `/api/items/{id}` | Remove an item |
+| POST | `/api/items/{id}/images` | Upload a new image for an item (multipart) |
+| GET | `/api/items/{id}/images` | List an item's images |
 
 **POST `/api/collections/{collectionId}/items`**
 ```json
@@ -76,8 +80,6 @@ Images are their own resource, uploaded against an existing item — this keeps 
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/items/{itemId}/images` | Upload a new image for an item (multipart) |
-| GET | `/api/items/{itemId}/images` | List an item's images |
 | DELETE | `/api/images/{id}` | Remove a specific image |
 
 **POST `/api/items/{itemId}/images`** — response:
