@@ -16,6 +16,8 @@ erDiagram
     uuid id PK
     uuid userId FK
     string name
+    decimal totalPricePaid
+    decimal totalPriceNow
   }
   ITEM {
     uuid id PK
