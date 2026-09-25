@@ -35,7 +35,7 @@ erDiagram
   IMAGE {
     uuid id PK
     uuid itemId FK
-    string url
+    bytes data
     string originalFilename
     string contentType
     int fileSizeBytes
@@ -74,12 +74,12 @@ One-to-many with Collection: each item belongs to exactly one collection.
 ### Image
 - `id` — uuid primary key
 - `itemId` — uuid, foreign key to Item
-- `url` — where the resized/uploaded image is served from
+- `data` — the resized image bytes, stored as `bytea` and loaded lazily (ADR-018). Served at `/api/images/{id}`, so no URL or path is stored
 - `originalFilename` — the filename as uploaded, for display purposes
 - `contentType` — e.g. `image/jpeg`, used for validation and serving
 - `fileSizeBytes` — enforces "small size" constraint, useful for debugging storage
 - `createdAt` — when the image was uploaded
-One-to-many with Item: an item can have multiple images, even though the MVP only ever uploads one. Future-proofs for cases like front/back photos of a card without a schema migration.
+One-to-many with Item: an item can have multiple images, even though the MVP only ever uploads one. Future-proofs for cases like front/back photos of a card without a schema migration. Deleting an item cascades to its images.
  
 ## Fixed value sets
  

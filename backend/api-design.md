@@ -4,7 +4,7 @@
 
 - **Mechanism:** JWT (stateless token)
 - **Flow:** `POST /api/auth/login` validates credentials (hardcoded dev user for MVP) and returns a signed JWT
-- **Usage:** Angular attaches the token as `Authorization: Bearer <token>` on all subsequent requests
+- **Usage:** Angular attaches the token as `Authorization: Bearer <token>` on all subsequent requests, except `GET /api/images/{id}` (public by unguessable UUID, see Images)
 - Structured so real accounts for friends can be added later without changing the auth mechanism — only how credentials are validated changes.
 
 | Method | Endpoint | Description |
@@ -80,6 +80,7 @@ Images are their own resource, uploaded against an existing item — this keeps 
 
 | Method | Endpoint | Description |
 |---|---|---|
+| GET | `/api/images/{id}` | Image bytes with the stored `Content-Type` and a long `Cache-Control`. **No auth**, so a plain `<img src>` works (ADR-018) |
 | DELETE | `/api/images/{id}` | Remove a specific image |
 
 **POST `/api/items/{itemId}/images`** — response:
@@ -87,7 +88,7 @@ Images are their own resource, uploaded against an existing item — this keeps 
 {
   "id": "a1b2...",
   "itemId": "c3a1...",
-  "url": "/uploads/a1b2....jpg",
+  "url": "/api/images/a1b2...",   // derived from id, not stored
   "originalFilename": "luffy_front.jpg",
   "contentType": "image/jpeg",
   "fileSizeBytes": 84213,

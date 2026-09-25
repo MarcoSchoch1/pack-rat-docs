@@ -13,7 +13,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 [ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS)
 
 **Images (cross-cutting: data model + API + constraints)**
-[ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (entity) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (endpoint) · [ADR-015](#adr-015-image-upload-limits--max-2mb-upload-resized-to-500px-longest-edge) (size limits)
+[ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (entity) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (endpoint) · [ADR-015](#adr-015-image-upload-limits--max-2mb-upload-resized-to-500px-longest-edge) (size limits) · [ADR-018](#adr-018-store-images-as-bytea-in-postgres-served-publicly-by-unguessable-uuid) (storage & serving)
 
 **Repos & infrastructure**
 [ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-009](#adr-009-split-backend-and-frontend-into-separate-repositories) (repo split) · [ADR-010](#adr-010-separate-containers-per-service-db-only-docker-during-local-development) (container-per-service) · [ADR-012](#adr-012-docker-compose-for-local-postgres-lives-in-the-backend-repo-a-separate-deploy-repo-will-handle-full-multi-service-orchestration) (compose file placement, deploy repo)
@@ -305,3 +305,27 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** Dashboard's "total price now" is real and functional immediately, user-maintained. The field and aggregation are already in place for when automated lookup arrives later — that becomes a new write path filling the same field, not a schema change.
 
 **Related:** ADR-006 (currency field), ADR-004 (marketplaceLink stays the manual fallback)
+
+---
+
+## ADR-018: Store images as bytea in Postgres, served publicly by unguessable UUID
+
+**Status:** Accepted
+
+**Context:** Uploaded images (ADR-008) need to be stored somewhere. The app should stay fully self-hosted with no dependency on a cloud provider, and images are small: at most 500px on the longest edge after resizing, so around 50KB each (ADR-015). There is also a frontend constraint. A plain `<img src>` cannot send the JWT `Authorization` header (ADR-007), so serving images behind the normal auth would force the frontend to fetch each one as a blob.
+
+**Decision:**
+- Store the resized image bytes directly in Postgres as a `bytea` column on the `Image` table. `Image.url` is no longer stored. The image is served at `/api/images/{id}`.
+- Map the column lazily (`@Basic(fetch = FetchType.LAZY)`) so loading items or image metadata does not pull the bytes.
+- Deleting an item cascades to its images (`ON DELETE CASCADE`).
+- `GET /api/images/{id}` is `permitAll` and returns the bytes with the stored `contentType` and a long `Cache-Control` max-age. The UUID id (ADR-002) is effectively unguessable, which is the same model as presigned or CDN URLs. Upload and delete stay JWT-protected.
+- Frontend: upload with `FormData` (multipart) and display with a plain `<img [src]="'/api/images/' + id" loading="lazy">`.
+
+**Alternatives considered:**
+- **Filesystem on a Docker volume:** Keeps the DB small and is common practice, but adds a second thing to back up, can leave orphan files when deletes fail halfway, and needs care around file paths.
+- **S3-compatible object storage in its own container (Garage, SeaweedFS, MinIO):** This is the industry-standard shape and offers an easy migration path to a cloud bucket, but it adds a container, credentials and an SDK. That is more moving parts than a friends-scale app needs.
+- **JWT-protected image endpoint with blob fetching in Angular:** Keeps images behind auth, but adds frontend code for every image, and card photos are not sensitive enough to justify it.
+
+**Consequences:** No new infrastructure. A single `pg_dump` backs up items and images together, and uploads and deletes are transactional with no orphan files. The costs: the DB grows (about 500MB per 10k images), every image request goes through the backend (offset by browser caching), and anyone with an image URL can view that image. If storage ever outgrows this, migrating means copying the bytes to files or object storage and rewriting only the image service. The frontend is unaffected because it only ever sees a URL.
+
+**Related:** ADR-002 (UUID ids), ADR-004 (Image entity), ADR-007 (JWT auth), ADR-008 (upload endpoint), ADR-015 (size limits)
