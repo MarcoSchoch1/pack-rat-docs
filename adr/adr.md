@@ -10,7 +10,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 [ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field)
 
 **API design**
-[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS)
+[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS) · [ADR-019](#adr-019-send-the-jwt-in-an-httponly-cookie-instead-of-storing-it-in-localstorage) (token in httpOnly cookie)
 
 **Images (cross-cutting: data model + API + constraints)**
 [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (entity) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (endpoint) · [ADR-015](#adr-015-image-upload-limits--max-2mb-upload-resized-to-500px-longest-edge) (size limits) · [ADR-018](#adr-018-store-images-as-bytea-in-postgres-served-publicly-by-unguessable-uuid) (storage & serving)
@@ -329,3 +329,28 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** No new infrastructure. A single `pg_dump` backs up items and images together, and uploads and deletes are transactional with no orphan files. The costs: the DB grows (about 500MB per 10k images), every image request goes through the backend (offset by browser caching), and anyone with an image URL can view that image. If storage ever outgrows this, migrating means copying the bytes to files or object storage and rewriting only the image service. The frontend is unaffected because it only ever sees a URL.
 
 **Related:** ADR-002 (UUID ids), ADR-004 (Image entity), ADR-007 (JWT auth), ADR-008 (upload endpoint), ADR-015 (size limits)
+
+---
+
+## ADR-019: Send the JWT in an httpOnly cookie instead of storing it in localStorage
+
+**Status:** Proposed
+
+**Context:** ADR-007 sends the JWT as a Bearer token, so the Angular frontend has to keep it somewhere JavaScript can read, which in practice means `localStorage`. That is the usual pairing, but any script injected through an XSS bug can read `localStorage` and send the token elsewhere. The token then works from any machine until it expires. Angular escapes template bindings by default, so XSS is unlikely, but one `bypassSecurityTrust*` call or one compromised npm dependency is enough.
+
+**Decision:**
+- Keep JWTs and stateless auth (ADR-007). Only the transport changes.
+- On login, the backend sets the token as a cookie with `HttpOnly; Secure; SameSite=Lax; Path=/api`. It no longer returns the token in the response body. A logout endpoint clears the cookie.
+- The JWT filter reads the token from the cookie instead of the `Authorization` header.
+- CORS (ADR-016) sets `allowCredentials(true)`, which already requires explicit origins rather than `*`. The frontend sends requests with `withCredentials: true`.
+- Deploy the frontend and backend on the same site (e.g. `app.example.com` and `api.example.com`) so `SameSite=Lax` holds. `localhost:4200` and `localhost:8080` already count as the same site, since ports are ignored.
+- Because the browser now attaches credentials automatically, CSRF becomes a concern. `SameSite=Lax` blocks cross-site `POST`/`PUT`/`DELETE`, which covers it as long as no state-changing `GET` endpoints exist. Spring's `CookieCsrfTokenRepository` is the fallback if the deployment ever becomes cross-site.
+
+**Alternatives considered:**
+- **Keep the token in localStorage:** No backend change and no CSRF concern, but a single XSS bug leaks a usable token.
+- **Keep the token only in memory (an Angular service):** XSS can't read it after the fact, but it is lost on every page reload, so the user logs in again or a refresh-token cookie is needed anyway, which brings back the cookie work.
+- **Server-side sessions:** Rejected in ADR-007 and still not needed. An httpOnly cookie gets the XSS benefit without giving up statelessness.
+
+**Consequences:** XSS can no longer steal the token. It can still make requests as the user while the page is open, so this limits the damage rather than removing it. The cost is a small backend change (set and clear the cookie, read it in the filter), CORS credentials, and a same-site deployment constraint. The frontend gets simpler: it stores no token, and the auth interceptor only sets `withCredentials`. As a side effect, `<img>` tags would now send the cookie, which removes the reason ADR-018 made the image endpoint public. That can stay as it is, but it no longer has to.
+
+**Related:** ADR-007 (JWT auth, transport revised here), ADR-016 (CORS, now with credentials), ADR-018 (public image endpoint)
