@@ -32,9 +32,10 @@ Rough screen layouts agreed on during design discussion, before implementation. 
 
 ![Add item form mockup](images/add-item-form.png)
 
-- Fields match the finalized data model: name, price paid, current price (optional), currency, date acquired, condition, marketplace link, picture
+- Fields match the finalized data model: name, self-pulled, price paid, current price (optional), currency, date acquired, condition, marketplace link, picture
 - Condition is a dropdown of the fixed grading scale (see `data-model.md`)
 - Image upload happens as a separate step from item creation (see ADR-008)
+- "Self-pulled" checkbox: when ticked, price paid is set to 0 and disabled; unticking re-enables it (see ADR-020)
 
 ## 5. Item detail
 

@@ -24,6 +24,7 @@ erDiagram
     uuid collectionId FK
     string name
     decimal pricePaid
+    boolean selfPulled
     decimal priceNow "nullable"
     string currency
     date dateAcquired
@@ -61,7 +62,8 @@ One-to-many with User: a user can own multiple collections, even though the MVP 
 - `id` — uuid primary key
 - `collectionId` — uuid, foreign key to Collection
 - `name`
-- `pricePaid` — decimal
+- `pricePaid` — decimal, ≥ 0; always 0 when `selfPulled` is true (see ADR-020)
+- `selfPulled` — boolean, not null, default false; true if the user pulled the card from a pack themselves rather than buying it
 - `priceNow` — decimal, nullable; current value, entered manually by the user for now (see ADR-017)
 - `currency` — ISO code (e.g. CHF, USD, EUR) — applies to both `pricePaid` and `priceNow`
 - `dateAcquired` — date the item was obtained (user-entered)

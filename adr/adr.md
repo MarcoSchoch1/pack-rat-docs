@@ -7,7 +7,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 ## Index by topic
 
 **Database & data model**
-[ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field)
+[ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field) · [ADR-020](#adr-020-mark-self-pulled-cards-with-a-selfpulled-boolean-price-paid-forced-to-0) (self-pulled flag)
 
 **API design**
 [ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS) · [ADR-019](#adr-019-send-the-jwt-in-an-httponly-cookie-instead-of-storing-it-in-localstorage) (token in httpOnly cookie)
@@ -25,7 +25,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 [ADR-013](#adr-013-backend-project-setup--maven-java-21-lts-package-by-layer) (Maven/Java 21/package structure) · [ADR-014](#adr-014-secrets-management-via-gitignored-local-config-environment-variables-in-deployment) (secrets management)
 
 **Pricing**
-[ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field) · [ADR-017](#adr-017-current-price-is-a-manual-optional-field-for-now--no-automated-price-lookup-yet) (manual current price)
+[ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field) · [ADR-017](#adr-017-current-price-is-a-manual-optional-field-for-now--no-automated-price-lookup-yet) (manual current price) · [ADR-020](#adr-020-mark-self-pulled-cards-with-a-selfpulled-boolean-price-paid-forced-to-0) (self-pulled flag)
 
 ---
 
@@ -354,3 +354,26 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** XSS can no longer steal the token. It can still make requests as the user while the page is open, so this limits the damage rather than removing it. The cost is a small backend change (set and clear the cookie, read it in the filter), CORS credentials, and a same-site deployment constraint. The frontend gets simpler: it stores no token, and the auth interceptor only sets `withCredentials`. As a side effect, `<img>` tags would now send the cookie, which removes the reason ADR-018 made the image endpoint public. That can stay as it is, but it no longer has to.
 
 **Related:** ADR-007 (JWT auth, transport revised here), ADR-016 (CORS, now with credentials), ADR-018 (public image endpoint)
+
+---
+
+## ADR-020: Mark self-pulled cards with a `selfPulled` boolean, price paid forced to 0
+
+**Status:** Accepted
+
+**Context:** Not every card is bought. Many are pulled from packs the user opened themselves, so there is no meaningful price paid for that single card. `pricePaid` was required and had to be positive, so a pulled card could not be entered honestly.
+
+**Decision:**
+- Add `selfPulled` to `Item` (`boolean NOT NULL DEFAULT false`). Existing items count as bought, so no backfill is needed.
+- Relax `pricePaid` validation from "positive" to "≥ 0".
+- If `selfPulled` is true, the backend stores `pricePaid` as 0 regardless of what the client sends, so "pulled but paid 45 CHF" can't exist.
+- The add item form gets a "Self-pulled" checkbox that sets price paid to 0 and disables the field.
+- Totals need no change: a pulled card adds 0 to total price paid, and its value still counts through `priceNow` (ADR-017).
+
+**Alternatives considered:**
+- **Only allow `pricePaid = 0`, no flag:** No schema change, but 0 is ambiguous (pulled, gift, or just not entered) and pulled cards can't be filtered later.
+- **`acquisitionType` enum (BOUGHT / PULLED / TRADED / GIFT):** Covers more cases, but trades and gifts aren't needed for the MVP. Can replace the boolean later as a feature (migration: `selfPulled = true` → `PULLED`, otherwise `BOUGHT`).
+
+**Consequences:** One column, one validation change, one checkbox. The pack cost behind a pulled card isn't tracked anywhere, so total price paid understates what was actually spent on packs. Acceptable for the MVP.
+
+**Related:** ADR-006 (currency), ADR-017 (manual current price)

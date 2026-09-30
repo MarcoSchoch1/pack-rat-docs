@@ -51,6 +51,7 @@
 {
   "name": "OP01 Monkey D. Luffy Alt Art",
   "pricePaid": 45.00,
+  "selfPulled": false,
   "priceNow": null,
   "currency": "CHF",
   "dateAcquired": "2026-03-14",
@@ -64,6 +65,7 @@
   "collectionId": "9f2b...",
   "name": "OP01 Monkey D. Luffy Alt Art",
   "pricePaid": 45.00,
+  "selfPulled": false,
   "priceNow": null,
   "currency": "CHF",
   "dateAcquired": "2026-03-14",
@@ -73,6 +75,8 @@
   "updatedAt": "2026-09-17T10:22:00Z"
 }
 ```
+
+If `selfPulled` is `true`, the backend stores `pricePaid` as `0` regardless of the value sent (ADR-020). `selfPulled` defaults to `false` if omitted.
 
 ## Images
 
@@ -103,7 +107,7 @@ All endpoints return a consistent error body:
 ```json
 {
   "error": "VALIDATION_ERROR",
-  "message": "pricePaid must be positive",
+  "message": "pricePaid must not be negative",
   "field": "pricePaid"
 }
 ```
