@@ -9,8 +9,18 @@ Rough screen layouts agreed on during design discussion, before implementation. 
 - Dev/hardcoded login for MVP
 - Fields: username, password
 - Centered card on a plain background
+- After login: `GET /api/collections` — empty list → Create collection screen, otherwise → Dashboard
 
-## 2. Dashboard (collection overview)
+## 2. Create collection (first login only)
+
+![Create collection mockup](images/create-collection.png)
+
+- Shown once, when the user has no collection yet
+- Same centered-card layout as Login
+- Field: collection name; submit → `POST /api/collections` → Dashboard
+- MVP: one collection per user (ADR-003), so no collection list/switcher — this screen never shows again
+
+## 3. Dashboard (collection overview)
 
 ![Dashboard mockup](images/dashboard.png)
 
@@ -18,7 +28,7 @@ Rough screen layouts agreed on during design discussion, before implementation. 
 - Two metric cards: total price paid, total price now (sum of each item's manually-entered current price — see ADR-017; shows "—" if no item has one set)
 - Item grid: photo-first cards (name + price paid), click through to item detail
 
-## 3. Add item form
+## 4. Add item form
 
 ![Add item form mockup](images/add-item-form.png)
 
@@ -26,7 +36,7 @@ Rough screen layouts agreed on during design discussion, before implementation. 
 - Condition is a dropdown of the fixed grading scale (see `data-model.md`)
 - Image upload happens as a separate step from item creation (see ADR-008)
 
-## 4. Item detail
+## 5. Item detail
 
 ![Item detail mockup](images/item-detail.png)
 
