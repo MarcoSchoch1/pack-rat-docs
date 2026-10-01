@@ -58,4 +58,5 @@ Found while using the MVP:
 3. **Self sign-up** — users can register their own account instead of the hardcoded dev login.
 4. **Visual polish** — a more stylish look; the visual direction in [`frontend/ui-design.md`](frontend/ui-design.md) is still open.
 5. **Multiple collections** — users can have more than one collection. With two or more, an overview dashboard tracks totals across all collections, like the item dashboard does for one collection. Data model already allows this (ADR-003).
+6. **Browser tab branding** — the tab shows a Pack-Rat favicon/logo and "Pack-Rat" as the page title.
  
