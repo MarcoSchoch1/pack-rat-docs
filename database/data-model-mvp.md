@@ -5,12 +5,18 @@
 ```mermaid
 erDiagram
   USER ||--o{ COLLECTION : owns
+  USER ||--o{ INVITE : creates
   COLLECTION ||--o{ ITEM : contains
   ITEM ||--o{ IMAGE : has
   USER {
     uuid id PK
-    string username
+    string username "unique, case-insensitive"
     string password
+  }
+  INVITE {
+    uuid id PK "also the token in the link"
+    uuid createdBy FK
+    datetime expiresAt
   }
   COLLECTION {
     uuid id PK
@@ -48,15 +54,21 @@ erDiagram
  
 ### User
 - `id` — uuid primary key
-- `username`
-- `password`
-Dev/hardcoded login for MVP. Structured so real accounts for friends can be added later without reworking the schema.
+- `username` — 3–32 characters, unique case-insensitively (DB unique constraint)
+- `password` — BCrypt hash
+Accounts are created through invite links (ADR-021). The `dev` user is only seeded under the `local` profile.
+
+### Invite
+- `id` — uuid primary key, also the token in the invite link (unguessable, ADR-002)
+- `createdBy` — uuid, foreign key to User
+- `expiresAt` — 7 days after creation
+Single-use: deleted in the same transaction that creates the new user (ADR-021). Expired invites can stay in the table; they no longer validate.
  
 ### Collection
 - `id` — uuid primary key
 - `userId` — uuid, foreign key to User
 - `name`
-One-to-many with User: a user can own multiple collections, even though the MVP only creates and displays one. Keeps the door open for use cases like separate collections per TCG later.
+One-to-many with User: a user can own multiple collections, e.g. one per TCG (ADR-003). The overview dashboard shows totals across all of them (ADR-022).
  
 ### Item
 - `id` — uuid primary key

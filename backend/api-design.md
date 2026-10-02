@@ -3,19 +3,58 @@
 ## Authentication
 
 - **Mechanism:** JWT (stateless token)
-- **Flow:** `POST /api/auth/login` validates credentials (hardcoded dev user for MVP) and returns a signed JWT
+- **Flow:** `POST /api/auth/login` validates credentials against the `users` table (BCrypt) and returns a signed JWT
+- **Sign-up:** only through a single-use invite link (ADR-021). A logged-in user creates an invite, sends the link to a friend, and the friend registers with it. There is no open registration.
 - **Usage:** Angular attaches the token as `Authorization: Bearer <token>` on all subsequent requests, except `GET /api/images/{id}` (public by unguessable UUID, see Images)
-- Structured so real accounts for friends can be added later without changing the auth mechanism — only how credentials are validated changes.
 
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/auth/login` | Validates credentials, returns a JWT |
+| POST | `/api/auth/register` | **No auth.** Creates an account from an invite token, returns a JWT like login (ADR-021) |
+
+**POST `/api/auth/register`**
+```json
+// Request
+{
+  "inviteToken": "5e8d...",
+  "username": "zoro",
+  "password": "at-least-8-chars"
+}
+
+// Response — 201 Created, same body as POST /api/auth/login
+```
+
+- Username: 3–32 characters, trimmed, unique case-insensitively → `409 USERNAME_TAKEN` if taken
+- Password: at least 8 characters, no composition rules → `400 VALIDATION_ERROR` if shorter
+- Invite missing, expired or already used → `404 INVITE_NOT_FOUND`
+- On success the invite is deleted in the same transaction, so a link works once. The new user has no collection yet.
+
+## Invites
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/invites` | Creates a single-use invite link, valid for 7 days. Any logged-in user can invite |
+| GET | `/api/invites/{token}` | **No auth.** `200` if the invite exists and hasn't expired, otherwise `404`. Lets the register screen reject a dead link before showing the form |
+
+**POST `/api/invites`** — no request body. Response — 201 Created:
+```json
+{
+  "url": "https://<frontend>/register?invite=5e8d...",
+  "expiresAt": "2026-10-09T10:00:00Z"
+}
+```
+The token is the invite's random UUID (ADR-002), unguessable like image URLs (ADR-018). The frontend base URL in `url` comes from config.
+
+**GET `/api/invites/{token}`** — response `200`:
+```json
+{ "expiresAt": "2026-10-09T10:00:00Z" }
+```
 
 ## Collections
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/collections` | List the current user's collections (MVP: returns one) |
+| GET | `/api/collections` | List the current user's collections, each with `itemCount`, `totalPricePaid`, `totalPriceNow` (ADR-022) |
 | POST | `/api/collections` | Create a collection |
 | GET | `/api/collections/{id}` | Get a single collection |
 | PUT | `/api/collections/{id}` | Update a collection |
@@ -23,6 +62,27 @@
 | GET | `/api/collections/{id}/overview` | Dashboard data: name, total price paid, total price now |
 | GET | `/api/collections/{id}/items` | List items in a collection |
 | POST | `/api/collections/{id}/items` | Add a new item to a collection |
+
+**GET `/api/collections`** — response, one aggregate query (ADR-022):
+```json
+[
+  {
+    "id": "9f2b...",
+    "name": "My One Piece Collection",
+    "itemCount": 42,
+    "totalPricePaid": 1240.50,
+    "totalPriceNow": 980.00
+  },
+  {
+    "id": "b71c...",
+    "name": "Pokémon",
+    "itemCount": 7,
+    "totalPricePaid": 85.00,
+    "totalPriceNow": null
+  }
+]
+```
+Totals follow the same rules as `/overview`. The overview dashboard adds them up on the client. Amounts are summed without currency conversion (ADR-006).
 
 **GET `/api/collections/{id}/overview`** — response:
 ```json
@@ -120,5 +180,6 @@ Standard HTTP status codes:
 | 401 | Unauthenticated (missing/invalid JWT) |
 | 403 | Forbidden (authenticated but not permitted) |
 | 404 | Resource not found |
+| 409 | Conflict (e.g. username already taken) |
 | 500 | Server error |
 

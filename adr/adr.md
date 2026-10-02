@@ -7,10 +7,10 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 ## Index by topic
 
 **Database & data model**
-[ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field) · [ADR-020](#adr-020-mark-self-pulled-cards-with-a-selfpulled-boolean-price-paid-forced-to-0) (self-pulled flag)
+[ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-002](#adr-002-use-uuids-instead-of-auto-incrementing-integers-for-primary-keys) (UUID keys) · [ADR-003](#adr-003-keep-user--collection-as-one-to-many-even-though-the-mvp-only-uses-one-collection-per-user) (User→Collection) · [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (Image entity) · [ADR-005](#adr-005-fixed-enum-for-item-condition-instead-of-free-text) (condition enum) · [ADR-006](#adr-006-store-currency-as-a-field-per-item-rather-than-assuming-a-single-fixed-currency) (currency field) · [ADR-020](#adr-020-mark-self-pulled-cards-with-a-selfpulled-boolean-price-paid-forced-to-0) (self-pulled flag) · [ADR-022](#adr-022-multiple-collections--totals-per-collection-in-the-list-response-overview-dashboard-on-the-client) (multiple collections)
 
 **API design**
-[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS) · [ADR-019](#adr-019-send-the-jwt-in-an-httponly-cookie-instead-of-storing-it-in-localstorage) (token in httpOnly cookie)
+[ADR-007](#adr-007-jwt-for-authentication-instead-of-server-side-sessions) (JWT auth) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (image upload endpoint) · [ADR-016](#adr-016-explicit-cors-configuration-via-spring-security-not-a-reverse-proxy-workaround) (CORS) · [ADR-019](#adr-019-send-the-jwt-in-an-httponly-cookie-instead-of-storing-it-in-localstorage) (token in httpOnly cookie) · [ADR-021](#adr-021-self-sign-up-through-single-use-invite-links) (self sign-up) · [ADR-022](#adr-022-multiple-collections--totals-per-collection-in-the-list-response-overview-dashboard-on-the-client) (multiple collections)
 
 **Images (cross-cutting: data model + API + constraints)**
 [ADR-004](#adr-004-model-image-as-its-own-entity-rather-than-fields-on-item) (entity) · [ADR-008](#adr-008-image-upload-as-its-own-endpoint-decoupled-from-item-creation) (endpoint) · [ADR-015](#adr-015-image-upload-limits--max-2mb-upload-resized-to-500px-longest-edge) (size limits) · [ADR-018](#adr-018-store-images-as-bytea-in-postgres-served-publicly-by-unguessable-uuid) (storage & serving)
@@ -377,3 +377,52 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** One column, one validation change, one checkbox. The pack cost behind a pulled card isn't tracked anywhere, so total price paid understates what was actually spent on packs. Acceptable for the MVP.
 
 **Related:** ADR-006 (currency), ADR-017 (manual current price)
+
+---
+
+## ADR-021: Self sign-up through single-use invite links
+
+**Status:** Accepted
+
+**Context:** Login already checks credentials against the `users` table with BCrypt (ADR-007). The only account is a `dev` user seeded under the `local` profile, so in production nobody can log in until a user is inserted by hand. Friends need to create their own accounts. Once deployed, the app is reachable from the internet, so a fully open sign-up lets anyone create accounts and fill the database with images (ADR-018).
+
+**Decision:**
+- Sign-up only works through an invite link, the same way a "confirm your email" link works: whoever has the link can register once, and nobody else can.
+- New `Invite` entity: `id` (UUID, also the token in the link), `createdBy` (FK to User), `expiresAt` (7 days after creation). Like image URLs (ADR-018), the random UUID (ADR-002) is unguessable enough to act as the secret.
+- `POST /api/invites` (logged in) creates an invite and returns `{ url, expiresAt }`, e.g. `https://<frontend>/register?invite=<uuid>`. Any logged-in user can invite. There are no roles, and the users are friends.
+- `GET /api/invites/{token}` (public) returns `200` if the invite exists and has not expired, otherwise `404`. The register screen calls it first, so a dead link shows "This invite link is invalid or expired" instead of a form that can't succeed.
+- `POST /api/auth/register` (public) with `{ inviteToken, username, password }` creates the user with a BCrypt hash (the existing `PasswordEncoder` bean) and deletes the invite in the same transaction, so the link works once. It returns the token exactly like `POST /api/auth/login`. ADR-019 changes how the token travels for both endpoints. A new user has no collection, so the existing first-login flow shows the create collection screen.
+- Username: 3–32 characters, trimmed, compared case-insensitively. Add a unique constraint on `username`; a duplicate returns `409 Conflict`. Password: at least 8 characters, no composition rules (in line with NIST SP 800-63B).
+- Frontend: an "Invite a friend" action creates an invite and copies the link. The login screen has no sign-up link. `/register` without a valid invite only shows the invalid-link message.
+
+**Alternatives considered:**
+- **Open sign-up:** Simplest, but anyone who finds the URL can create accounts and upload images.
+- **One shared invite code from config:** One config value and no table, but a leaked code works for anyone until it is changed, and there's no way to tell who it was given to.
+- **Admin creates accounts by hand (SQL or an admin endpoint):** No public endpoint, but every new friend needs manual work and the admin has to choose their password.
+- **Email verification:** The real version of this flow, but needs mail sending and an email field. Sending the link over chat does the same job at this scale.
+
+**Consequences:** One small table, three endpoints, one screen and one button. A leaked link creates at most one account and expires after 7 days. Any user can invite more users, so the user base grows by trust. If that ever becomes a problem, restrict `POST /api/invites` to an admin flag. Expired invites stay in the table until cleaned up, which is harmless at this size. There's no password reset or rate limiting yet; both can be added later without changing this design.
+
+**Related:** ADR-002 (UUID ids), ADR-007 (JWT auth), ADR-018 (unguessable-UUID URLs, image storage), ADR-019 (token transport)
+
+---
+
+## ADR-022: Multiple collections — totals per collection in the list response, overview dashboard on the client
+
+**Status:** Accepted
+
+**Context:** ADR-003 already allows a user to own several collections, but the UI only ever creates and shows one. Users want, for example, one collection per TCG, plus an overview that shows totals across all of them, just as the item dashboard does for one collection.
+
+**Decision:**
+- `GET /api/collections` returns each collection with its totals: `id`, `name`, `itemCount`, `totalPricePaid`, `totalPriceNow` (same rules as `/overview`, ADR-017). One aggregate query, one request.
+- The overview dashboard sums these per-collection totals on the client and shows a tile per collection that links to its item dashboard.
+- Routing after login: 0 collections → create collection screen; 1 → that collection's dashboard (unchanged); 2 or more → overview dashboard.
+- The create collection screen is reused for a "New collection" action, reachable from the dashboard and the overview. Item dashboards get a link back to the overview once a second collection exists.
+
+**Alternatives considered:**
+- **Call `/api/collections/{id}/overview` per collection:** No backend change, but N+1 requests on every overview load.
+- **Dedicated `GET /api/collections/overview` with server-side grand totals:** One more endpoint for a sum the client can do in one line from data it already loads.
+
+**Consequences:** One query change and one new screen. Grand totals add up amounts without converting currencies, which is how per-collection totals already work (ADR-006). Mixed-currency totals are therefore approximate until currency conversion exists. Renaming and deleting collections already have endpoints (`PUT`/`DELETE /api/collections/{id}`) but no UI yet; that is out of scope here.
+
+**Related:** ADR-003 (User → Collection one-to-many), ADR-006 (currency per item), ADR-017 (manual current price)
