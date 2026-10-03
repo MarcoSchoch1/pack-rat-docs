@@ -59,10 +59,10 @@ MVP complete — all core functions above work end to end. See the issue board f
 
 Found while using the MVP:
 
-1. **In-app delete confirmation** — replace the browser `confirm()` popup with an in-app dialog.
-2. **Uniform item tiles** — every tile in the dashboard grid is the same size; price paid and price now fit on the tile (one line or two).
+1. **In-app delete confirmation** — replace the browser `confirm()` popup with an in-app dialog. :white_check_mark:
+2. **Uniform item tiles** — every tile in the dashboard grid is the same size; price paid and price now fit on the tile (one line or two). :white_check_mark:
 3. **Self sign-up** — users can register their own account instead of the hardcoded dev login.
-4. **Delete uploaded image** — an image can be removed from an item after it was uploaded.
+4. **Delete uploaded image** — an image can be removed from an item after it was uploaded. :white_check_mark:
 5. **Visual polish** — a more stylish look; the visual direction in [`frontend/ui-design.md`](frontend/ui-design.md) is still open.
-6. **Browser tab branding** — the tab shows a Pack-Rat favicon/logo and "Pack-Rat" as the page title.
+6. **Browser tab branding** — the tab shows a Pack-Rat favicon/logo and "Pack-Rat" as the page title. :white_check_mark:
 7. **Multiple collections** — users can have more than one collection. With two or more, an overview dashboard tracks totals across all collections, like the item dashboard does for one collection. Data model already allows this (ADR-003). 
