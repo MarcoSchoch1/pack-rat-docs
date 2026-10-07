@@ -27,14 +27,14 @@
 - Username: 3–32 characters, trimmed, unique case-insensitively → `409 USERNAME_TAKEN` if taken
 - Password: at least 8 characters, no composition rules → `400 VALIDATION_ERROR` if shorter
 - Invite missing, expired or already used → `404 INVITE_NOT_FOUND`
-- On success the invite is deleted in the same transaction, so a link works once. The new user has no collection yet.
+- On success the invite is marked used (`usedAt`, `usedBy`) in the same transaction with a conditional update, so a link works once. The row is kept as an audit trail. The new user has no collection yet.
 
 ## Invites
 
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/invites` | Creates a single-use invite link, valid for 7 days. Any logged-in user can invite |
-| GET | `/api/invites/{token}` | **No auth.** `200` if the invite exists and hasn't expired, otherwise `404`. Lets the register screen reject a dead link before showing the form |
+| GET | `/api/invites/{token}` | **No auth.** `200` if the invite exists, is unused and hasn't expired, otherwise `404`. Lets the register screen reject a dead link before showing the form |
 
 **POST `/api/invites`** — no request body. Response — 201 Created:
 ```json

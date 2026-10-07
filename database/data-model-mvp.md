@@ -6,6 +6,7 @@
 erDiagram
   USER ||--o{ COLLECTION : owns
   USER ||--o{ INVITE : creates
+  USER |o--o| INVITE : "registered with"
   COLLECTION ||--o{ ITEM : contains
   ITEM ||--o{ IMAGE : has
   USER {
@@ -16,7 +17,10 @@ erDiagram
   INVITE {
     uuid id PK "also the token in the link"
     uuid createdBy FK
+    datetime createdAt
     datetime expiresAt
+    datetime usedAt "nullable"
+    uuid usedBy FK "nullable, unique"
   }
   COLLECTION {
     uuid id PK
@@ -61,8 +65,11 @@ Accounts are created through invite links (ADR-021). The `dev` user is only seed
 ### Invite
 - `id` — uuid primary key, also the token in the invite link (unguessable, ADR-002)
 - `createdBy` — uuid, foreign key to User
+- `createdAt` — when the invite was created
 - `expiresAt` — 7 days after creation
-Single-use: deleted in the same transaction that creates the new user (ADR-021). Expired invites can stay in the table; they no longer validate.
+- `usedAt` — nullable; set when someone registers with the invite
+- `usedBy` — uuid, nullable, unique, foreign key to User; the account created with this invite
+Single-use: an invite is valid only while `usedAt` is null and `expiresAt` is in the future. Registration claims it with one conditional update in the same transaction that creates the user (ADR-021). Rows are never deleted, so the table is the sign-up audit trail: who invited whom, and when.
  
 ### Collection
 - `id` — uuid primary key
