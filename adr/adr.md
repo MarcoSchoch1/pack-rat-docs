@@ -18,6 +18,9 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Repos & infrastructure**
 [ADR-001](#adr-001-use-postgresql-via-docker-instead-of-h2) (Postgres/Docker) · [ADR-009](#adr-009-split-backend-and-frontend-into-separate-repositories) (repo split) · [ADR-010](#adr-010-separate-containers-per-service-db-only-docker-during-local-development) (container-per-service) · [ADR-012](#adr-012-docker-compose-for-local-postgres-lives-in-the-backend-repo-a-separate-deploy-repo-will-handle-full-multi-service-orchestration) (compose file placement, deploy repo)
 
+**Hosting & deployment**
+[ADR-023](#adr-023-host-on-an-old-computer-at-home-running-ubuntu-server-and-docker-engine) (home server) · [ADR-024](#adr-024-reach-the-app-only-over-tailscale-with-https-from-tailscale-serve) (Tailscale only) · [ADR-025](#adr-025-one-origin-in-deployment-the-frontends-nginx-serves-the-app-and-proxies-api-to-the-backend) (single origin) · [ADR-026](#adr-026-build-images-with-github-actions-publish-them-to-ghcr-and-run-them-from-pack-rat-deploy) (GHCR images, deploy repo) · [ADR-027](#adr-027-create-the-first-account-from-environment-variables-when-the-database-is-empty) (first account) · [ADR-028](#adr-028-nightly-pg_dump-backups-stored-on-a-different-disk) (backups)
+
 **Frontend**
 [ADR-011](#adr-011-use-tailwind-css-instead-of-a-component-library-eg-angular-material) (Tailwind CSS)
 
@@ -275,7 +278,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 
 ## ADR-016: Explicit CORS configuration via Spring Security, not a reverse-proxy workaround
 
-**Status:** Accepted
+**Status:** Accepted (still used in dev; in deployment, ADR-025 serves both under one origin)
 
 **Context:** Frontend (Angular) and backend (Spring Boot) are separate origins both locally (`localhost:4200` vs `localhost:8080`) and in deployment (separate services per ADR-009/ADR-010) — browsers block cross-origin requests by default, so something has to explicitly allow them.
 
@@ -334,16 +337,16 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 
 ## ADR-019: Send the JWT in an httpOnly cookie instead of storing it in localStorage
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context:** ADR-007 sends the JWT as a Bearer token, so the Angular frontend has to keep it somewhere JavaScript can read, which in practice means `localStorage`. That is the usual pairing, but any script injected through an XSS bug can read `localStorage` and send the token elsewhere. The token then works from any machine until it expires. Angular escapes template bindings by default, so XSS is unlikely, but one `bypassSecurityTrust*` call or one compromised npm dependency is enough.
 
 **Decision:**
 - Keep JWTs and stateless auth (ADR-007). Only the transport changes.
-- On login, the backend sets the token as a cookie with `HttpOnly; Secure; SameSite=Lax; Path=/api`. It no longer returns the token in the response body. A logout endpoint clears the cookie.
+- On login, the backend sets the token as a cookie with `HttpOnly; Secure; SameSite=Lax; Path=/api`. It no longer returns the token in the response body. It returns only `{ "expiresAt": "…" }`, which the frontend keeps (it's not a secret) to know whether the user is still logged in, since it can't read the cookie. Any `401` sends the user back to login. `POST /api/auth/logout` clears the cookie.
 - The JWT filter reads the token from the cookie instead of the `Authorization` header.
 - CORS (ADR-016) sets `allowCredentials(true)`, which already requires explicit origins rather than `*`. The frontend sends requests with `withCredentials: true`.
-- Deploy the frontend and backend on the same site (e.g. `app.example.com` and `api.example.com`) so `SameSite=Lax` holds. `localhost:4200` and `localhost:8080` already count as the same site, since ports are ignored.
+- Deploy the frontend and backend on the same site so `SameSite=Lax` holds. In the home deployment they share one origin (ADR-025), served over HTTPS by Tailscale (ADR-024), which `Secure` needs. `localhost:4200` and `localhost:8080` already count as the same site, since ports are ignored.
 - Because the browser now attaches credentials automatically, CSRF becomes a concern. `SameSite=Lax` blocks cross-site `POST`/`PUT`/`DELETE`, which covers it as long as no state-changing `GET` endpoints exist. Spring's `CookieCsrfTokenRepository` is the fallback if the deployment ever becomes cross-site.
 
 **Alternatives considered:**
@@ -353,7 +356,7 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 
 **Consequences:** XSS can no longer steal the token. It can still make requests as the user while the page is open, so this limits the damage rather than removing it. The cost is a small backend change (set and clear the cookie, read it in the filter), CORS credentials, and a same-site deployment constraint. The frontend gets simpler: it stores no token, and the auth interceptor only sets `withCredentials`. As a side effect, `<img>` tags would now send the cookie, which removes the reason ADR-018 made the image endpoint public. That can stay as it is, but it no longer has to.
 
-**Related:** ADR-007 (JWT auth, transport revised here), ADR-016 (CORS, now with credentials), ADR-018 (public image endpoint)
+**Related:** ADR-007 (JWT auth, transport revised here), ADR-016 (CORS, now with credentials), ADR-018 (public image endpoint), ADR-024 (HTTPS), ADR-025 (single origin)
 
 ---
 
@@ -426,3 +429,147 @@ Entries are numbered chronologically, in the order decisions were made, and are 
 **Consequences:** One query change and one new screen. Grand totals add up amounts without converting currencies, which is how per-collection totals already work (ADR-006). Mixed-currency totals are therefore approximate until currency conversion exists. Renaming and deleting collections already have endpoints (`PUT`/`DELETE /api/collections/{id}`) but no UI yet; that is out of scope here.
 
 **Related:** ADR-003 (User → Collection one-to-many), ADR-006 (currency per item), ADR-017 (manual current price)
+
+---
+
+## ADR-023: Host on an old computer at home running Ubuntu Server and Docker Engine
+
+**Status:** Accepted
+
+**Context:** ADR-010 left the hosting target open (VPS or home server). The app is friends-scale, and an old computer is available at home. A VPS costs money every month and puts the app on the public internet by default, which ADR-021 only partly prepared for (no rate limiting, no password reset yet).
+
+**Decision:**
+- Self-host on the old computer. Wipe it and install Ubuntu Server 26.04 LTS (headless, no desktop) with hostname `packrat`.
+- Install Docker Engine and the Compose plugin from Docker's apt repository, not Docker Desktop and not the snap.
+- Every container uses `restart: unless-stopped` and Docker starts at boot, so the app comes back after a reboot or power cut without anyone logging in. In the BIOS, set "power on after AC loss". On a laptop, also make the OS ignore a closed lid.
+- In the router, add a DHCP reservation so the computer's LAN IP never changes. No port forwarding.
+- Administer it over SSH from the Mac, with key-only login (password login disabled). `ufw` allows SSH from the home subnet only, plus everything on `tailscale0` (ADR-024). Ubuntu's `unattended-upgrades` stays on for security patches.
+
+**Alternatives considered:**
+- **VPS (e.g. Hetzner):** Reliable hardware and a public IP, but a monthly cost, and the app sits on the internet by default.
+- **Keep the existing OS and use Docker Desktop:** No reinstall, but Docker Desktop runs inside a VM, uses more RAM and only starts when a user logs in. That's the wrong fit for an always-on server.
+- **Raspberry Pi:** Low power, but needs arm64 images, and an SD card is a poor place for a database.
+
+**Consequences:** No running cost besides power, and full control over the machine. Availability is that of a home PC: power cuts, ISP outages and an old disk. Because the hardware is old, backups (ADR-028) matter more. Ports published by Docker bypass `ufw`, because Docker writes its own iptables rules. The frontend only publishes on `127.0.0.1` (ADR-024), so this doesn't expose anything. Any port published on all interfaces later would bypass the firewall.
+
+**Related:** ADR-010 (container-per-service, hosting deferred), ADR-024 (access), ADR-028 (backups)
+
+---
+
+## ADR-024: Reach the app only over Tailscale, with HTTPS from `tailscale serve`
+
+**Status:** Accepted
+
+**Context:** The app has to be reachable at home, and ADR-021 assumed friends would use it from their own homes too. Putting it on the public internet would need a domain, TLS and the hardening ADR-021 deferred. Plain HTTP on a LAN IP also isn't a secure context. In that case `navigator.clipboard` (the invite dialog's copy button) doesn't work, and the `Secure` auth cookie (ADR-019) is never set, so login fails.
+
+**Decision:**
+- Install Tailscale on the host (machine name `packrat`). In the Tailscale admin console, enable MagicDNS and HTTPS certificates.
+- `sudo tailscale serve --bg 80` publishes the frontend container at `https://packrat.<tailnet>.ts.net`, with a Let's Encrypt certificate that Tailscale issues and renews. This is the canonical URL, and `FRONTEND_URL` (used for invite links, ADR-021) points to it.
+- Friends get access by having the `packrat` machine shared with their own Tailscale account (machine sharing). They don't join the tailnet, so they can't see any other devices.
+- The frontend container publishes port 80 on `127.0.0.1` only, so `tailscale serve` is the only way in. At home, your own devices use Tailscale as well.
+- Nothing is port-forwarded, so the app isn't on the public internet.
+
+**Alternatives considered:**
+- **LAN only:** Simplest, but friends can only use it at your place, and HTTPS would need a self-run CA.
+- **Public, via Cloudflare Tunnel or port forwarding plus Let's Encrypt:** Friends don't need a client app, but it needs a domain and makes the login page public, so rate limiting and password reset would have to come first.
+- **Also serve plain HTTP on the LAN IP as a fallback:** Works on devices without Tailscale, but login fails there (`Secure` cookie, ADR-019) and the clipboard doesn't work, so it would only be a broken copy of the app.
+- **Self-signed certificate or own CA on the LAN:** HTTPS without Tailscale, but every device has to be told by hand to trust the CA.
+
+**Consequences:** Every friend installs Tailscale and creates an account once. The free plan covers this scale. Certificates renew without any work. Every device, including yours at home, needs the Tailscale client. New connections depend on Tailscale's coordination service being up; existing ones keep working.
+
+**Related:** ADR-019 (cookie needs HTTPS), ADR-021 (invite links), ADR-023 (host), ADR-025 (single origin)
+
+---
+
+## ADR-025: One origin in deployment: the frontend's Nginx serves the app and proxies `/api` to the backend
+
+**Status:** Accepted
+
+**Context:** ADR-016 chose CORS over a proxy so the frontend and backend could be deployed separately. In practice both run on one host, reached at its `ts.net` URL (ADR-024). The Angular build bakes `apiUrl` in at build time, and with ADR-026 the image is built in CI, which doesn't know the host. An absolute API URL would also need a CORS entry, and credentialed CORS for the cookie (ADR-019).
+
+**Decision:**
+- The frontend image is Nginx serving the Angular build. `location /api/` passes to `http://backend:8080`. Every other path falls back to `index.html` so Angular routes work on reload.
+- `environment.ts` uses `apiUrl: '/api'`. Because it's relative, one image works under any hostname. Dev keeps `http://localhost:8080/api` and CORS (ADR-016) unchanged.
+- Set `client_max_body_size 5m` in Nginx to match Spring's `max-file-size`. Nginx's default of 1MB would reject valid 2MB uploads (ADR-015) with `413` before they reach the backend.
+- Only the frontend's port 80 is published, on `127.0.0.1` (ADR-024). The backend and Postgres are only reachable on the compose network.
+- The CORS config stays in the backend. `CORS_ALLOWED_ORIGINS` is set to the `ts.net` URL, but same-origin requests never use it.
+
+**Alternatives considered:**
+- **Keep separate origins (frontend on :80, backend on :8080) with CORS:** What ADR-016 planned, but the API host has to be baked into the image or injected at container start, and CORS has to allow credentials.
+- **Inject `apiUrl` at container start (`envsubst` into a `config.json`):** Keeps the cross-origin setup working, but adds moving parts for no gain here.
+- **A separate reverse-proxy container (Caddy, Traefik):** A fourth container to do what the existing Nginx does in a few lines. TLS already comes from Tailscale.
+
+**Consequences:** Same origin also makes ADR-019's cookie trivially same-site, with no credentialed CORS in production. The frontend and backend now deploy together behind this Nginx. Deploying them apart later means going back to ADR-016's CORS, which stays in place for exactly that. The frontend repo gains one `nginx.conf`.
+
+**Related:** ADR-010 (containers), ADR-015 (upload size), ADR-016 (CORS, still used in dev), ADR-019 (cookie), ADR-026 (images built in CI)
+
+---
+
+## ADR-026: Build images with GitHub Actions, publish them to GHCR and run them from `pack-rat-deploy`
+
+**Status:** Accepted
+
+**Context:** ADR-012 planned a `pack-rat-deploy` repo for the full compose file. The server needs the backend and frontend images from somewhere. Building them on an old computer is slow (Maven plus npm) and would put a JDK and Node on the server.
+
+**Decision:**
+- Each code repo gets a multi-stage `Dockerfile`:
+  - Backend: build in `maven:3-eclipse-temurin-21`, run in `eclipse-temurin:21-jre`.
+  - Frontend: build in `node:22` (`npm ci`, `ng build`), run in `nginx:stable-alpine` (ADR-025).
+- Each code repo gets a workflow that, on every push to `main`, builds the image and pushes it to `ghcr.io/marcoschoch1/pack-rat-backend` or `ghcr.io/marcoschoch1/pack-rat-frontend` with the tags `latest` and `sha-<short sha>`. The platform is `linux/amd64`; add `linux/arm64` only if the host turns out to be ARM.
+- The packages are public. The images contain no secrets (ADR-014), so the server can pull them without credentials.
+- Create `pack-rat-deploy` with `compose.yaml`, `.env.example`, `backup.sh` (ADR-028) and a README that links to the runbook in `deployment/deployment.md`. Image tags come from `.env` (`BACKEND_TAG`, `FRONTEND_TAG`, default `latest`), so rolling back means setting a `sha-…` tag and running `docker compose up -d`.
+- Pin Postgres to a major version, `postgres:18`, instead of `latest`, with the volume at `/var/lib/postgresql` as 18 expects. A major upgrade needs a dump and restore, so it has to be a deliberate step. The dev `compose.yaml` in `pack-rat-backend` gets the same pin. Postgres has a `pg_isready` healthcheck, and the backend waits for it with `depends_on: condition: service_healthy`.
+- Deploys are manual. On the server: `git pull` (deploy repo), then `docker compose pull && docker compose up -d`. Nothing updates automatically.
+
+**Alternatives considered:**
+- **Build on the server from clones of both repos:** No CI and no registry, but slow builds on old hardware, a JDK and Node on the server, and no record of which commit is running.
+- **Auto-deploy (Watchtower or a deploy step in CI):** Hands-off, but a broken `main` goes live unattended, and Watchtower needs access to the Docker socket.
+- **Docker Hub:** Works the same way, but it's another account and has pull rate limits. GHCR sits next to the code.
+
+**Consequences:** Every merge to `main` produces an image named after its commit, and a rollback is one env var. The cost is two Dockerfiles and two workflows to maintain. Actions minutes are free for public repos. If a repo is private, its package is too, and the server needs `docker login ghcr.io` with a `read:packages` token. Updating stays a manual SSH step, which is intended at this scale.
+
+**Related:** ADR-009 (repo split), ADR-010 (containers), ADR-012 (deploy repo), ADR-014 (secrets via env), ADR-025 (frontend Nginx)
+
+---
+
+## ADR-027: Create the first account from environment variables when the database is empty
+
+**Status:** Accepted
+
+**Context:** Sign-up needs an invite (ADR-021), and only a logged-in user can create an invite. The `dev` user is only seeded under the `local` profile. On a fresh production database nobody can log in, so nobody can invite anyone.
+
+**Decision:**
+- At startup, an `ApplicationRunner` checks two things: the `users` table is empty, and both `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set. If both hold, it creates that user with the same validation and `PasswordEncoder` as register (ADR-021). Otherwise it does nothing.
+- It isn't tied to a profile. The `local` profile never sets these vars, so dev is unaffected.
+- After the first successful start, delete `ADMIN_PASSWORD` from `.env` on the server. The account has no special rights. It's an ordinary user who happens to send the first invites.
+
+**Alternatives considered:**
+- **Insert the user by hand with SQL:** No code, but hashing a BCrypt password by hand is easy to get wrong, and it's one more runbook chore.
+- **Open registration while the table is empty:** The first visitor becomes the first user, which is a race on any reachable instance.
+- **Run the dev seeding in prod:** Creates an account with a known, hardcoded password.
+
+**Consequences:** About 15 lines plus one test. It's safe to leave in: it can't create a second user or reset a password, because it only acts on an empty table. Restoring an empty database would trigger it again only if the vars are still set. Until it's removed, the password sits in plain text in `.env`, readable only by the server's admin.
+
+**Related:** ADR-007 (auth), ADR-014 (secrets via env), ADR-021 (invite-only sign-up)
+
+---
+
+## ADR-028: Nightly `pg_dump` backups, stored on a different disk
+
+**Status:** Accepted
+
+**Context:** All data, including images (ADR-018), lives in Postgres, on one Docker volume, on the old computer's disk (ADR-023). A volume is not a backup. Also, `ddl-auto=update` changes the schema when a new backend version starts.
+
+**Decision:**
+- `backup.sh` in `pack-rat-deploy` runs nightly at 03:00 from cron. It runs `docker compose exec -T postgres pg_dump -Fc` and writes `/srv/backups/packrat-YYYY-MM-DD.dump`, then deletes dumps older than 14 days.
+- `/srv/backups` is a different physical disk than the system disk: a USB drive or a second internal disk. Now and then, copy the latest dump to the Mac with `scp` for a copy outside the machine.
+- Run `backup.sh` by hand before every deploy.
+- The restore steps are in the runbook. Test them once right after setup: restore into a fresh database and log in.
+
+**Alternatives considered:**
+- **Copy the Docker volume's files:** Postgres has to be stopped for a consistent copy, and the copy is tied to the Postgres major version.
+- **Off-site cloud backup (restic to Backblaze B2 or S3):** Survives fire or theft, but needs an account, credentials and a small cost. This is the natural next step.
+
+**Consequences:** Covers a dead disk and a bad deploy, losing at most a day of data. A fire or theft is only covered by the occasional copy on the Mac. The dumps are small (around 50KB per image, ADR-018).
+
+**Related:** ADR-018 (images in Postgres), ADR-023 (old hardware), ADR-026 (deploy repo)

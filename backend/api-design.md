@@ -3,14 +3,16 @@
 ## Authentication
 
 - **Mechanism:** JWT (stateless token)
-- **Flow:** `POST /api/auth/login` validates credentials against the `users` table (BCrypt) and returns a signed JWT
+- **Flow:** `POST /api/auth/login` validates credentials against the `users` table (BCrypt) and sets a signed JWT as an httpOnly cookie (ADR-019)
 - **Sign-up:** only through a single-use invite link (ADR-021). A logged-in user creates an invite, sends the link to a friend, and the friend registers with it. There is no open registration.
-- **Usage:** Angular attaches the token as `Authorization: Bearer <token>` on all subsequent requests, except `GET /api/images/{id}` (public by unguessable UUID, see Images)
+- **Cookie:** `HttpOnly; Secure; SameSite=Lax; Path=/api`. The browser sends it on every `/api` request, and Angular only sets `withCredentials: true`. JavaScript never sees the token. `GET /api/images/{id}` needs no auth (public by unguessable UUID, see Images)
+- **Logged-in state:** login and register return `{ "expiresAt": "…" }`, which the frontend keeps to know when the session ends. Any `401` goes back to the login screen
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/auth/login` | Validates credentials, returns a JWT |
-| POST | `/api/auth/register` | **No auth.** Creates an account from an invite token, returns a JWT like login (ADR-021) |
+| POST | `/api/auth/login` | Validates credentials, sets the JWT cookie, returns `{ expiresAt }` |
+| POST | `/api/auth/register` | **No auth.** Creates an account from an invite token, sets the cookie and returns `{ expiresAt }` like login (ADR-021) |
+| POST | `/api/auth/logout` | Clears the cookie, `204 No Content` |
 
 **POST `/api/auth/register`**
 ```json
@@ -21,7 +23,8 @@
   "password": "at-least-8-chars"
 }
 
-// Response — 201 Created, same body as POST /api/auth/login
+// Response — 201 Created, Set-Cookie + same body as POST /api/auth/login
+{ "expiresAt": "2026-10-20T11:00:00Z" }
 ```
 
 - Username: 3–32 characters, trimmed, unique case-insensitively → `409 USERNAME_TAKEN` if taken
@@ -177,7 +180,7 @@ Standard HTTP status codes:
 | Status | Meaning |
 |---|---|
 | 400 | Validation error |
-| 401 | Unauthenticated (missing/invalid JWT) |
+| 401 | Unauthenticated (missing/invalid/expired JWT cookie) |
 | 403 | Forbidden (authenticated but not permitted) |
 | 404 | Resource not found |
 | 409 | Conflict (e.g. username already taken) |
