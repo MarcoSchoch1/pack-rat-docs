@@ -53,6 +53,49 @@ MVP complete — all core functions above work end to end. See the issue board f
 
 ## Next improvements
 
-Found while using the MVP:
+Found while using the MVP. Open tickets on the project board:
 
- 
+**Security — JWT in an httpOnly cookie**
+
+- [B1](https://github.com/MarcoSchoch1/pack-rat-backend/issues/28) — Set the JWT as an httpOnly cookie and add logout
+- [B2](https://github.com/MarcoSchoch1/pack-rat-backend/issues/29) — Read the JWT from the cookie in the auth filter
+- [B3](https://github.com/MarcoSchoch1/pack-rat-backend/issues/30) — Enable credentialed CORS with explicit origins
+- [F1](https://github.com/MarcoSchoch1/pack-rat-frontend/issues/20) — Send requests with credentials and stop storing the token
+- [F2](https://github.com/MarcoSchoch1/pack-rat-frontend/issues/21) — Track session state from expiresAt, add logout and 401 handling
+
+**Features**
+
+- [B4](https://github.com/MarcoSchoch1/pack-rat-backend/issues/31) — Return totals per collection from `GET /api/collections`
+- [F4](https://github.com/MarcoSchoch1/pack-rat-frontend/issues/23) — Route after login by number of collections
+
+**Deployment — app side**
+
+- [B5](https://github.com/MarcoSchoch1/pack-rat-backend/issues/32) — Add a multi-stage Dockerfile
+- [B6](https://github.com/MarcoSchoch1/pack-rat-backend/issues/33) — Publish the backend image to GHCR from GitHub Actions
+- [B7](https://github.com/MarcoSchoch1/pack-rat-backend/issues/34) — Pin dev Postgres to `postgres:18` with a healthcheck
+- [B8](https://github.com/MarcoSchoch1/pack-rat-backend/issues/35) — Make the prod profile fully environment-driven
+- [B9](https://github.com/MarcoSchoch1/pack-rat-backend/issues/36) — Create the first account from env vars on an empty database
+- [F6](https://github.com/MarcoSchoch1/pack-rat-frontend/issues/24) — Add a multi-stage Dockerfile and nginx.conf
+- [F7](https://github.com/MarcoSchoch1/pack-rat-frontend/issues/25) — Use a relative apiUrl in the production build
+- [F8](https://github.com/MarcoSchoch1/pack-rat-frontend/issues/26) — Publish the frontend image to GHCR from GitHub Actions
+
+**Deployment — deploy repo**
+
+- [D1](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/13) — Add compose.yaml and .env.example
+- [D2](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/14) — Add backup.sh
+
+**Deployment — server setup and operations**
+
+- [O1](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/1) — Create the pack-rat-deploy repository
+- [O2](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/2) — Install Ubuntu Server 26.04 on the home computer
+- [O3](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/3) — Make the server survive power cuts
+- [O4](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/4) — Harden SSH, set up ufw, enable unattended upgrades
+- [O5](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/5) — Install Docker Engine and the Compose plugin
+- [O6](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/6) — Install Tailscale and publish the app
+- [O7](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/7) — Mount the backup disk at `/srv/backups`
+- [O8](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/8) — Smoke-test the full compose stack on the Mac
+- [O9](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/9) — First deploy on the server
+- [O10](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/10) — Schedule nightly backups and test a restore
+- [O11](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/11) — Connect your devices and onboard the first friend
+- [O12](https://github.com/MarcoSchoch1/pack-rat-deploy/issues/12) — Dry-run an update and a rollback
+
