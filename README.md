@@ -26,7 +26,7 @@ Pack-Rat lets you build and manage your own collection without relying on someon
 - **Frontend:** Angular + Tailwind CSS ([pack-rat-frontend](https://github.com/MarcoSchoch1/pack-rat-frontend))
 - **Database:** PostgreSQL via Docker (in repo: pack-rat-backend)
 - **Auth:** Stateless JWT (dev/hardcoded login for now, real accounts later)
-- **Hosting:** old home PC on Ubuntu Server, Docker Compose, images from GHCR, reachable over Tailscale ([pack-rat-deploy](https://github.com/MarcoSchoch1/pack-rat-deploy), to be created)
+- **Hosting:** old home PC on Ubuntu Server, Docker Compose, images from GHCR, reachable over Tailscale ([pack-rat-deploy](https://github.com/MarcoSchoch1/pack-rat-deploy))
 
 ## Design docs
 
